@@ -15,7 +15,7 @@
   "customManagers": [
     {
       "customType": "regex",
-      "managerFilePatterns": ["^vscode/Dockerfile$"],
+      "managerFilePatterns": ["/vscode/Dockerfile$/"],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>.+?)\\n(?:ARG\\s+\\w+=\"?)(?<currentValue>[0-9][^\"\\s]+)"
       ],
