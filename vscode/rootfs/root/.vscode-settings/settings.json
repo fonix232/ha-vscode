@@ -1,0 +1,25 @@
+{
+    "workbench.colorTheme": "Default Dark Modern",
+    "editor.fontSize": 14,
+    "editor.tabSize": 2,
+    "files.autoSave": "afterDelay",
+    "files.autoSaveDelay": 1000,
+    "files.trimTrailingWhitespace": true,
+    "terminal.integrated.shell.linux": "/bin/zsh",
+    "yaml.schemas": {
+        "https://json.schemastore.org/homeassistant.json": [
+            "/config/*.yaml",
+            "/config/**/*.yaml",
+            "!secret*.yaml"
+        ]
+    },
+    "files.associations": {
+        "*.yaml": "home-assistant"
+    },
+    "files.exclude": {
+        "**/node_modules": true,
+        "**/.git": true,
+        "**/.DS_Store": true,
+        "**/__pycache__": true
+    }
+}

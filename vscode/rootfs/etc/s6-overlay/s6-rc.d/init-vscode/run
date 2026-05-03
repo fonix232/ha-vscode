@@ -1,0 +1,33 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+# ==============================================================================
+# Home Assistant Add-on: VS Code (Microsoft)
+# Sets up VS Code.
+# ==============================================================================
+declare config_path
+
+if bashio::config.has_value 'config_path'; then
+    config_path=$(bashio::config 'config_path')
+    if ! bashio::fs.directory_exists "${config_path}"; then
+        bashio::exit.nok "Configured config path does not exists"
+    fi
+    # Prevent using root directory as workspace to avoid performance issues
+    if [[ "${config_path}" == "/" ]]; then
+        bashio::exit.nok \
+            "Using the root directory (/) as workspace is not allowed. " \
+            "This causes severe performance issues as VS Code will index " \
+            "the entire filesystem. Please use /config or another specific " \
+            "directory instead."
+    fi
+fi
+
+# Ensure persistent data folders exist.
+mkdir -p /data/vscode/{server-data,user-data,extensions,tunnel-data}
+
+# Sets up default user settings on first start.
+if ! bashio::fs.file_exists '/data/vscode/user-data/User/settings.json'; then
+    mkdir -p /data/vscode/user-data/User \
+        || bashio::exit.nok "Could not create persistent storage folder."
+
+    cp /root/.vscode-settings/settings.json /data/vscode/user-data/User/settings.json
+fi

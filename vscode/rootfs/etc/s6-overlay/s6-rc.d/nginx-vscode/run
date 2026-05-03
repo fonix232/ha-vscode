@@ -1,0 +1,15 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+# ==============================================================================
+# Home Assistant Add-on: VS Code (Microsoft)
+# Runs nginx reverse proxy in front of VS Code serve-web.
+#
+# HA Supervisor strips the ingress URL prefix before forwarding to the add-on,
+# which means the CLI-proxy's mint-key cookie endpoint is never reachable.
+# nginx sits on ingress port 1337 and removes the Set-Cookie headers so VS Code
+# falls back to server-side (persistent) remote storage for secrets instead of
+# the broken client-side AES-encrypted localStorage path.
+# ==============================================================================
+bashio::log.info 'Starting nginx reverse proxy for VS Code...'
+
+exec nginx -c /etc/nginx/nginx-vscode.conf 2>&1

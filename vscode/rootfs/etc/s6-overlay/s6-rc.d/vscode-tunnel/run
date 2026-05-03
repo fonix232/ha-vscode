@@ -1,0 +1,28 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+# ==============================================================================
+# Home Assistant Add-on: VS Code (Microsoft)
+# Runs VS Code Tunnel for remote access via vscode.dev
+# ==============================================================================
+declare config_path
+
+# Only start if tunnel is enabled
+if ! bashio::config.true 'tunnel_enabled'; then
+    bashio::log.info 'VS Code Tunnel is disabled, skipping.'
+    exec sleep infinity
+fi 
+
+bashio::log.info 'Starting VS Code Tunnel...'
+
+config_path="/config"
+if bashio::config.has_value 'config_path'; then
+    config_path=$(bashio::config 'config_path')
+fi
+
+cd "${config_path}" || bashio::exit.nok "Could not change working directory"
+exec code \
+    --cli-data-dir "/data/vscode/cli-data" \
+    tunnel \
+    --accept-server-license-terms 
+    # --server-data-dir "/data/vscode/server-data" \
+    # --extensions-dir "/data/vscode/extensions"

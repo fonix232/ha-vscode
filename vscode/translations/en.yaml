@@ -1,0 +1,24 @@
+---
+configuration:
+  log_level:
+    name: Log Level
+    description: Controls the verbosity of the VS Code server logs.
+  config_path:
+    name: Config Path
+    description: >-
+      The path to open as workspace in VS Code. Defaults to /config
+      (Home Assistant configuration directory).
+  tunnel_enabled:
+    name: Enable Tunnel
+    description: >-
+      Enable VS Code Tunnel to allow remote access to this VS Code
+      instance from any device via vscode.dev. Requires signing in
+      with a GitHub or Microsoft account on first use.
+  packages:
+    name: System Packages
+    description: >-
+      Additional system packages to install on startup using apt.
+  init_commands:
+    name: Init Commands
+    description: >-
+      Commands to execute during add-on initialization, before VS Code starts.

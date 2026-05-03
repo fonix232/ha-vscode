@@ -1,0 +1,22 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "packageRules": [
+    {
+      "matchDatasources": ["github-releases"],
+      "matchPackageNames": ["microsoft/vscode"],
+      "automerge": false,
+      "labels": ["vscode-update"]
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["^vscode/Dockerfile$"],
+      "matchStrings": [
+        "#\\s*renovate:\\s*datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\nARG VSCODE_VERSION=\"(?<currentValue>.*?)\""
+      ],
+      "extractVersionTemplate": "^v?(?<version>.*)$"
+    }
+  ]
+}
