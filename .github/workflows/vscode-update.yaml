@@ -9,6 +9,10 @@ permissions:
   contents: write
   pull-requests: write
 
+concurrency:
+  group: vscode-update-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   update-and-merge:
     runs-on: ubuntu-latest
@@ -121,12 +125,25 @@ jobs:
         uses: actions/github-script@v9
         with:
           script: |
-            await github.rest.pulls.merge({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.payload.pull_request.number,
-              merge_method: 'squash',
-            });
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pull_number = context.payload.pull_request.number;
+
+            // Poll until GitHub has computed mergeability (it is async)
+            for (let i = 0; i < 12; i++) {
+              const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number });
+              if (pr.mergeable === true) {
+                await github.rest.pulls.merge({ owner, repo, pull_number, merge_method: 'squash' });
+                core.info('PR merged successfully');
+                return;
+              } else if (pr.mergeable === false) {
+                core.setFailed('PR is not mergeable (conflicts or branch protection rules)');
+                return;
+              }
+              core.info(`Mergeability not yet computed (attempt ${i + 1}/12), waiting 5s...`);
+              await new Promise(r => setTimeout(r, 5000));
+            }
+            core.setFailed('Timed out waiting for PR mergeability');
 
       - name: Tag release
         if: steps.check.outputs.updates_vscode == 'true'
