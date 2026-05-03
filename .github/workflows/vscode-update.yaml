@@ -55,14 +55,14 @@ jobs:
       - name: Update config.yaml version
         if: steps.check.outputs.updates_vscode == 'true'
         run: |
-          VERSION="${{ steps.version.outputs.vscode_version }}"
+          VERSION="${{ steps.version.outputs.vscode_version }}.0"
           sed -i "s/^version: .*/version: ${VERSION}/" vscode/config.yaml
           echo "Updated config.yaml version to ${VERSION}"
 
       - name: Commit and push config.yaml change
         if: steps.check.outputs.updates_vscode == 'true'
         run: |
-          VERSION="${{ steps.version.outputs.vscode_version }}"
+          VERSION="${{ steps.version.outputs.vscode_version }}.0"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add vscode/config.yaml
@@ -150,7 +150,7 @@ jobs:
         uses: actions/github-script@v9
         with:
           script: |
-            const version = '${{ steps.version.outputs.vscode_version }}';
+            const version = '${{ steps.version.outputs.vscode_version }}.0';
             const tag = `v${version}`;
 
             // Get the default branch HEAD after merge

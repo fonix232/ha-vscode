@@ -42,20 +42,25 @@ vscode/
 ### Why nginx sits in front of `code serve-web`
 
 HA Supervisor strips the ingress URL prefix before forwarding requests to the
-add-on container. The VS Code CLI proxy sets a `vscode-secret-key-path` cookie
-that encodes the full ingress path; the browser then POSTs to that path to
-derive an AES encryption key for localStorage secrets. Because the path is
-stripped, the request reaches the add-on as `/_vscode-cli/mint-key`, which the
-CLI proxy does not recognise — returning a 404.
+add-on container. VS Code registers its `/_vscode-cli/` handlers (including
+the `mint-key` AES key endpoint) under the full ingress path set via
+`--server-base-path`. Without restoring that prefix, the `mint-key` POST
+returns 404/503 and VS Code cannot derive the AES key for localStorage secret
+storage — losing GitHub Copilot auth and all other extension credentials on
+every page load.
 
-VS Code interprets a non-network 404 as a permanent failure and calls
-`localStorage.removeItem('secrets.provider')`, wiping all stored tokens (GitHub
-Copilot auth, etc.) on every page load.
+**Fix:** nginx on port 1337 proxies to `code serve-web` on `127.0.0.1:1338`.
+At container start-up the `nginx-vscode/run` script reads the current ingress
+entry via `bashio::addon.ingress_entry` and substitutes it into
+`nginx-vscode.conf.tmpl` (placeholder `@@INGRESS@@`), producing a runtime
+config at `/tmp/nginx-vscode.conf`. The generated config adds a dedicated
+`location /_vscode-cli/` block that prepends the ingress path before
+forwarding to VS Code, making the `mint-key` endpoint reachable.
 
-**Fix:** nginx on port 1337 proxies to `code serve-web` on `127.0.0.1:1338`
-and strips `Set-Cookie` from every response (`proxy_hide_header Set-Cookie`).
-Without the cookie, the workbench falls back to storing secrets server-side via
-the remote extension host, which persists to `/data/vscode/server-data`.
+The HA ingress token rotates on every add-on restart. VS Code sets a fresh
+`vscode-secret-key-path` cookie on the very next HTTP response (the page
+load), so the browser self-heals automatically on first access after a
+restart.
 
 Do not remove or bypass nginx. Do not add `--user-data-dir` to `code
 serve-web` — that flag is not accepted in web mode.
@@ -82,9 +87,17 @@ the health check (`curl http://127.0.0.1:1337/healthz`) fires.
 
 ### Version synchronisation
 
-`vscode/config.yaml#version` must always equal `VSCODE_VERSION` in
-`vscode/Dockerfile`. The `vscode-update.yaml` workflow enforces this
-automatically for Renovate PRs. When bumping manually, update both.
+The add-on version format is `{VSCODE_VERSION}.{ADDON_REVISION}` (e.g.
+`1.118.1.0`, `1.118.1.1`).  The fourth component is the add-on revision and
+allows releasing fixes to the add-on itself without waiting for a new VS Code
+version.  HA's `AwesomeVersion` library treats this as a 4-part `SIMPLEVER`
+and sorts it correctly (unlike `-1` SemVer pre-release suffixes, which sort
+*lower* than the base version).
+
+`vscode/config.yaml#version` is the single source of truth.  The
+`vscode-update.yaml` workflow resets the revision to `.0` automatically
+whenever Renovate bumps `VSCODE_VERSION`.  When bumping the Dockerfile
+manually, update `config.yaml` to `{NEW_VERSION}.0` as well.
 
 ---
 
@@ -102,8 +115,10 @@ automatically for Renovate PRs. When bumping manually, update both.
    `# hadolint ignore=DL3008` comment** — the base image does not pin apt
    package versions, and hadolint will fail the build.
 
-4. **Keep the nginx config in `/etc/nginx/nginx-vscode.conf`**, not in
-   `/etc/nginx/nginx.conf` — the base image may ship its own nginx.conf.
+4. **Keep the nginx config template in `/etc/nginx/nginx-vscode.conf.tmpl`**, not
+   `/etc/nginx/nginx.conf` — the base image may ship its own nginx.conf. The
+   `nginx-vscode/run` script substitutes `@@INGRESS@@` with the current ingress
+   entry at container start-up and writes the result to `/tmp/nginx-vscode.conf`.
 
 5. **Both `amd64` and `aarch64` must be supported.** VS Code is downloaded as
    an architecture-specific `.deb` inside the Dockerfile `RUN` layer.
@@ -125,9 +140,15 @@ automatically for Renovate PRs. When bumping manually, update both.
 
 ### Bump VS Code manually
 1. Update `ARG VSCODE_VERSION="<new>"` in `vscode/Dockerfile`.
-2. Update `version: <new>` in `vscode/config.yaml`.
+2. Update `version: <new>.0` in `vscode/config.yaml`.
 3. Add an entry to `vscode/CHANGELOG.md`.
-4. Commit, push, create a GitHub release to trigger the build workflow.
+4. Commit, push, create a GitHub release tagged `v<new>.0` to trigger the build workflow.
+
+### Release an add-on fix without a new VS Code version
+1. Increment the last component of `version` in `vscode/config.yaml`
+   (e.g. `1.118.1.0` → `1.118.1.1`).
+2. Add an entry to `vscode/CHANGELOG.md`.
+3. Commit, push, create a GitHub release tagged `v<version>` to trigger the build workflow.
 
 ### Add a new s6 service `<svc>`
 1. Create `rootfs/etc/s6-overlay/s6-rc.d/<svc>/type` → `longrun`
