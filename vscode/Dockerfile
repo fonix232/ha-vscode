@@ -24,8 +24,7 @@ RUN \
         git \
         curl \
         wget \
-        nginx \
-        openssh-client \
+        nginx \        libnginx-mod-http-headers-more-filter \        openssh-client \
         locales \
     \
     && sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
