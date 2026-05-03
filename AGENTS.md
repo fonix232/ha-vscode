@@ -134,6 +134,13 @@ manually, update `config.yaml` to `{NEW_VERSION}.0` as well.
 8. **Do not commit the `src/` directory.** It is used only for temporary
    source-code research and is not part of the add-on.
 
+9. **Bump the add-on revision on every functional change.** Whenever you modify
+   any file under `vscode/` (rootfs, Dockerfile, config, etc.) increment the
+   last component of `version` in `vscode/config.yaml` by 1
+   (e.g. `1.118.1.0` → `1.118.1.1`). This ensures users receive the update
+   via HA's add-on store. Do not bump the revision for changes that only affect
+   CI workflows, documentation, or Renovate config.
+
 ---
 
 ## Common tasks
