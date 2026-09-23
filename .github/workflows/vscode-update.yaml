@@ -1,11 +1,17 @@
 ---
 name: Auto-update VS Code version
 
+# Renovate bumps both vscode/Dockerfile and vscode/config.yaml in one PR (see
+# .github/renovate.json). This workflow verifies, merges, releases and builds
+# it. It must never push to the Renovate branch: doing so marks the PR as
+# edited and Renovate stops updating it.
+
 on:
   pull_request:
     types: [opened, synchronize]
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
 
@@ -16,162 +22,114 @@ concurrency:
 jobs:
   update-and-merge:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: >-
-      github.actor == 'renovate[bot]' ||
-      github.actor == 'renovate'
+      startsWith(github.head_ref, 'renovate/microsoft-vscode-') &&
+      (github.actor == 'renovate[bot]' || github.actor == 'renovate')
     steps:
-      - name: Check if PR updates VS Code version
-        id: check
+      - name: Verify, merge, release and build
         uses: actions/github-script@v9
         with:
           script: |
-            const { data: files } = await github.rest.pulls.listFiles({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.payload.pull_request.number,
-            });
-            const updatesVscode = files.some(f =>
-              f.filename === 'vscode/Dockerfile' &&
-              f.patch && f.patch.includes('VSCODE_VERSION')
-            );
-            core.setOutput('updates_vscode', updatesVscode.toString());
-
-      - name: Checkout PR branch
-        if: steps.check.outputs.updates_vscode == 'true'
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract VS Code version from Dockerfile
-        if: steps.check.outputs.updates_vscode == 'true'
-        id: version
-        run: |
-          VSCODE_VERSION=$(grep -oP 'ARG VSCODE_VERSION="\K[^"]+' vscode/Dockerfile)
-          echo "vscode_version=${VSCODE_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Detected VS Code version: ${VSCODE_VERSION}"
-
-      - name: Update config.yaml version
-        if: steps.check.outputs.updates_vscode == 'true'
-        run: |
-          VERSION="${{ steps.version.outputs.vscode_version }}.0"
-          sed -i "s/^version: .*/version: ${VERSION}/" vscode/config.yaml
-          echo "Updated config.yaml version to ${VERSION}"
-
-      - name: Commit and push config.yaml change
-        if: steps.check.outputs.updates_vscode == 'true'
-        run: |
-          VERSION="${{ steps.version.outputs.vscode_version }}.0"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add vscode/config.yaml
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "chore: bump add-on version to ${VERSION}"
-            git push
-          fi
-
-      - name: Wait for PR checks
-        if: steps.check.outputs.updates_vscode == 'true'
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const pr = context.payload.pull_request.number;
+            const { owner, repo } = context.repo;
+            const pull_number = context.payload.pull_request.number;
             const sha = context.payload.pull_request.head.sha;
+            const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-            // Wait up to 10 minutes for checks to complete
-            const maxAttempts = 30;
-            const delay = 20000; // 20 seconds
+            // 1. Verify config.yaml version == Dockerfile VSCODE_VERSION + ".0"
+            const read = async path => {
+              const { data } = await github.rest.repos.getContent({ owner, repo, path, ref: sha });
+              return Buffer.from(data.content, 'base64').toString();
+            };
+            const [dockerfile, config] = await Promise.all([
+              read('vscode/Dockerfile'),
+              read('vscode/config.yaml'),
+            ]);
+            const vscodeVersion = dockerfile.match(/^ARG VSCODE_VERSION="([^"]+)"/m)?.[1];
+            const version = config.match(/^version: (\S+)/m)?.[1];
+            core.info(`VS Code ${vscodeVersion}, add-on ${version}`);
+            if (!vscodeVersion || version !== `${vscodeVersion}.0`) {
+              core.setFailed(`config.yaml version ${version} does not match expected ${vscodeVersion}.0`);
+              return;
+            }
+            const tag = `v${version}`;
 
-            for (let i = 0; i < maxAttempts; i++) {
-              const { data: checks } = await github.rest.checks.listForRef({
-                owner, repo, ref: sha,
-                filter: 'latest',
+            // 2. Wait up to 10 minutes for other checks on the head commit
+            for (let i = 0; ; i++) {
+              const runs = await github.paginate(github.rest.checks.listForRef, {
+                owner, repo, ref: sha, filter: 'latest', per_page: 100,
               });
-
-              const pending = checks.check_runs.filter(
-                cr => cr.name !== context.job &&
-                      cr.status !== 'completed'
-              );
-
-              if (pending.length === 0 && checks.check_runs.length > 0) {
-                const failed = checks.check_runs.filter(
-                  cr => cr.name !== context.job &&
-                        cr.conclusion !== 'success' &&
-                        cr.conclusion !== 'skipped' &&
-                        cr.conclusion !== 'neutral'
-                );
+              const others = runs.filter(cr => cr.name !== context.job);
+              const pending = others.filter(cr => cr.status !== 'completed');
+              if (pending.length === 0) {
+                const failed = others.filter(cr =>
+                  !['success', 'skipped', 'neutral'].includes(cr.conclusion));
                 if (failed.length > 0) {
-                  const names = failed.map(cr => cr.name).join(', ');
-                  core.setFailed(`Checks failed: ${names}`);
+                  core.setFailed(`Checks failed: ${failed.map(cr => cr.name).join(', ')}`);
                   return;
                 }
-                core.info('All checks passed');
+                break;
+              }
+              if (i >= 30) {
+                core.setFailed('Timed out waiting for checks');
                 return;
               }
-
-              core.info(`Waiting for checks... (${pending.length} pending, attempt ${i + 1}/${maxAttempts})`);
-              await new Promise(r => setTimeout(r, delay));
+              core.info(`Waiting for ${pending.length} check(s)...`);
+              await sleep(20000);
             }
 
-            core.setFailed('Timed out waiting for checks');
-
-      - name: Merge PR
-        if: steps.check.outputs.updates_vscode == 'true'
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const pull_number = context.payload.pull_request.number;
-
-            // Poll until GitHub has computed mergeability (it is async)
-            for (let i = 0; i < 12; i++) {
+            // 3. Merge. pr.mergeable is computed asynchronously and can be
+            // stale, so retry the merge itself on 405. Passing sha guarantees
+            // only the verified commit is merged.
+            let mergeSha;
+            for (let i = 0; !mergeSha; i++) {
               const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number });
-              if (pr.mergeable === true) {
-                await github.rest.pulls.merge({ owner, repo, pull_number, merge_method: 'squash' });
-                core.info('PR merged successfully');
-                return;
-              } else if (pr.mergeable === false) {
+              if (pr.merged) {
+                mergeSha = pr.merge_commit_sha;
+                break;
+              }
+              if (pr.mergeable === false) {
                 core.setFailed('PR is not mergeable (conflicts or branch protection rules)');
                 return;
               }
-              core.info(`Mergeability not yet computed (attempt ${i + 1}/12), waiting 5s...`);
-              await new Promise(r => setTimeout(r, 5000));
+              if (pr.mergeable === true) {
+                try {
+                  ({ data: { sha: mergeSha } } = await github.rest.pulls.merge({
+                    owner, repo, pull_number, sha, merge_method: 'squash',
+                  }));
+                  break;
+                } catch (err) {
+                  if (err.status !== 405) throw err;
+                  core.info(`Merge rejected: ${err.message}`);
+                }
+              }
+              if (i >= 12) {
+                core.setFailed('Timed out trying to merge PR');
+                return;
+              }
+              await sleep(5000);
             }
-            core.setFailed('Timed out waiting for PR mergeability');
+            core.info(`Merged as ${mergeSha}`);
 
-      - name: Tag release
-        if: steps.check.outputs.updates_vscode == 'true'
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const version = '${{ steps.version.outputs.vscode_version }}.0';
-            const tag = `v${version}`;
+            // 4. Release (idempotent, so re-runs are safe)
+            try {
+              await github.rest.repos.createRelease({
+                owner, repo,
+                tag_name: tag,
+                target_commitish: mergeSha,
+                name: `VS Code ${version}`,
+                body: `Automated release: updates VS Code to ${version}`,
+                generate_release_notes: true,
+              });
+              core.info(`Created release ${tag}`);
+            } catch (err) {
+              if (err.status !== 422) throw err;
+              core.info(`Release ${tag} already exists`);
+            }
 
-            // Get the default branch HEAD after merge
-            const { data: ref } = await github.rest.git.getRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: 'heads/main',
+            // 5. Build. Releases created with GITHUB_TOKEN do not trigger
+            // other workflows; workflow_dispatch is exempt from that rule.
+            await github.rest.actions.createWorkflowDispatch({
+              owner, repo, workflow_id: 'build.yaml', ref: tag,
             });
-
-            await github.rest.git.createRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: `refs/tags/${tag}`,
-              sha: ref.object.sha,
-            });
-
-            await github.rest.repos.createRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: tag,
-              name: `VS Code ${version}`,
-              body: `Automated release: updates VS Code to ${version}`,
-              generate_release_notes: true,
-            });
+            core.info(`Dispatched build.yaml for ${tag}`);

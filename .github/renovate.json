@@ -20,6 +20,15 @@
         "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>.+?)\\n(?:ARG\\s+\\w+=\"?)(?<currentValue>[0-9][^\"\\s]+)"
       ],
       "extractVersionTemplate": "^v?(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/vscode/config\\.yaml$/"],
+      "matchStrings": ["\\nversion: (?<currentValue>\\d+\\.\\d+\\.\\d+)\\.\\d+"],
+      "depNameTemplate": "microsoft/vscode",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v?(?<version>.*)$",
+      "autoReplaceStringTemplate": "\nversion: {{{newValue}}}.0"
     }
   ]
 }
