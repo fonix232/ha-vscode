@@ -16,7 +16,7 @@ permissions:
 jobs:
   build:
     name: Build ${{ matrix.arch }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
@@ -26,8 +26,10 @@ jobs:
         include:
           - arch: amd64
             platform: linux/amd64
+            runner: ubuntu-latest
           - arch: aarch64
             platform: linux/arm64
+            runner: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
@@ -46,9 +48,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -63,7 +62,6 @@ jobs:
             ${{ env.REGISTRY }}/fonix232/ha-vscode-${{ matrix.arch }}:${{ steps.version.outputs.version }}
             ${{ env.REGISTRY }}/fonix232/ha-vscode-${{ matrix.arch }}:latest
           build-args: |
-            BUILD_FROM=ghcr.io/hassio-addons/debian-base:9.2.0
             BUILD_ARCH=${{ matrix.arch }}
             BUILD_DATE=${{ github.event.release.published_at || github.event.repository.updated_at }}
             BUILD_DESCRIPTION=Microsoft Visual Studio Code in the browser for Home Assistant
