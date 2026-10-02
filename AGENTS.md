@@ -31,6 +31,8 @@ vscode/
         settings.json          # Default settings seeded on first start
 .github/
   renovate.json                # Tracks VSCODE_VERSION in Dockerfile + config.yaml version
+  scripts/
+    changelog.js               # Writes CHANGELOG entries (VS Code notes + add-on changes)
   workflows/
     build.yaml                 # Builds & pushes ghcr.io images (release or dispatch)
     vscode-update.yaml         # Verifies, merges, releases & builds Renovate VS Code PRs
@@ -131,9 +133,15 @@ and sorts it correctly (unlike `-1` SemVer pre-release suffixes, which sort
 `VSCODE_VERSION` in the Dockerfile and resets `config.yaml` to
 `{NEW_VERSION}.0` in the same PR (two regex managers sharing the
 `microsoft/vscode` dependency).  The `vscode-update.yaml` workflow then checks
-the two agree, merges the PR, creates the `v{version}` release and dispatches
-`build.yaml`.  It never pushes to the Renovate branch: any foreign commit there
-makes Renovate treat the PR as edited and stop updating it.
+the two agree, adds the changelog entry to the PR, merges it, creates the
+`v{version}` release and dispatches `build.yaml`.
+
+Renovate treats a PR as edited, and stops updating it, as soon as a commit by
+any other author lands on its branch.  The changelog commit is therefore made
+as `github-actions[bot]`, which `renovate.json` lists in `gitIgnoredAuthors`.
+Do not push to Renovate branches under any other identity, and keep that entry
+in place.  When Renovate rewrites the branch (new version, conflict), the
+commit is dropped and the next workflow run adds it again.
 
 Releases created with `GITHUB_TOKEN` do not trigger other workflows, which is
 why the build is dispatched explicitly rather than relying on the release
@@ -141,6 +149,24 @@ event.  Releases created manually still trigger `build.yaml` via `release`.
 
 When bumping the Dockerfile manually, update `config.yaml` to
 `{NEW_VERSION}.0` as well.
+
+### Changelog
+
+`vscode/CHANGELOG.md` is what HA shows in the add-on store, and each entry
+is also used as the release notes for its GitHub release.  It has one
+`## <add-on version>` entry per release, newest first.
+
+- **VS Code bumps** (`.0`) are written by `.github/scripts/changelog.js`:
+  - a `### VS Code x.y.z` section with the release highlights from
+    `microsoft/vscode-docs` (or the "Update x.y.z" line for patch releases)
+    and a link to the full notes;
+  - a `### Add-on changes` section with every entry above the newest tagged
+    one, since those were never released on their own.  They ship with this
+    VS Code bump.
+- **Add-on revisions** are written by hand: add a
+  `## <version>` entry with user-facing bullets in the same change that bumps
+  the revision (rule 9).  If it is not released on its own, the next VS Code
+  bump folds it in.
 
 ---
 
@@ -168,7 +194,8 @@ When bumping the Dockerfile manually, update `config.yaml` to
 
 6. **Renovate manages `VSCODE_VERSION` only** (in the Dockerfile and the
    matching `config.yaml` version). Do not add other version tracking to
-   `renovate.json` unless explicitly asked. The CI build uses the Dockerfile's
+   `renovate.json` unless explicitly asked (`gitIgnoredAuthors` is required by
+   the changelog step, see Version synchronisation). The CI build uses the Dockerfile's
    `BUILD_FROM` default; do not pass `BUILD_FROM` from the workflow.
 
 7. **s6 service scripts must be executable (`chmod +x`).** Files under
@@ -183,7 +210,8 @@ When bumping the Dockerfile manually, update `config.yaml` to
    last component of `version` in `vscode/config.yaml` by 1
    (e.g. `1.118.1.0` → `1.118.1.1`). This ensures users receive the update
    via HA's add-on store. Do not bump the revision for changes that only affect
-   CI workflows, documentation, or Renovate config.
+   CI workflows, documentation, or Renovate config.  Add a matching
+   `## <version>` entry to `vscode/CHANGELOG.md` in the same change.
 
 ---
 
@@ -192,14 +220,17 @@ When bumping the Dockerfile manually, update `config.yaml` to
 ### Bump VS Code manually
 1. Update `ARG VSCODE_VERSION="<new>"` in `vscode/Dockerfile`.
 2. Update `version: <new>.0` in `vscode/config.yaml`.
-3. Add an entry to `vscode/CHANGELOG.md`.
-4. Commit, push, create a GitHub release tagged `v<new>.0` to trigger the build workflow.
+3. Run `node .github/scripts/changelog.js add <new>.0` to write the
+   changelog entry (needs the release tags fetched locally: `git fetch --tags`).
+4. Commit, push, then create the release, which triggers the build workflow:
+   `gh release create v<new>.0 --title "VS Code <new>.0" --notes "$(node .github/scripts/changelog.js notes <new>.0)"`.
 
 ### Release an add-on fix without a new VS Code version
 1. Increment the last component of `version` in `vscode/config.yaml`
    (e.g. `1.118.1.0` → `1.118.1.1`).
-2. Add an entry to `vscode/CHANGELOG.md`.
-3. Commit, push, create a GitHub release tagged `v<version>` to trigger the build workflow.
+2. Add a `## <version>` entry to `vscode/CHANGELOG.md`.
+3. Commit, push, then create the release, which triggers the build workflow:
+   `gh release create v<version> --title "VS Code <version>" --notes "$(node .github/scripts/changelog.js notes <version>)"`.
 
 ### Add a new s6 service `<svc>`
 1. Create `rootfs/etc/s6-overlay/s6-rc.d/<svc>/type` → `longrun`
