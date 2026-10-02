@@ -133,10 +133,15 @@ and sorts it correctly (unlike `-1` SemVer pre-release suffixes, which sort
 `VSCODE_VERSION` in the Dockerfile and resets `config.yaml` to
 `{NEW_VERSION}.0` in the same PR (two regex managers sharing the
 `microsoft/vscode` dependency).  The `vscode-update.yaml` workflow then checks
-the two agree, merges the PR, commits the changelog entry to `main`, creates
-the `v{version}` release on that commit and dispatches `build.yaml`.  It never
-pushes to the Renovate branch: any foreign commit there makes Renovate treat
-the PR as edited and stop updating it.
+the two agree, adds the changelog entry to the PR, merges it, creates the
+`v{version}` release and dispatches `build.yaml`.
+
+Renovate treats a PR as edited, and stops updating it, as soon as a commit by
+any other author lands on its branch.  The changelog commit is therefore made
+as `github-actions[bot]`, which `renovate.json` lists in `gitIgnoredAuthors`.
+Do not push to Renovate branches under any other identity, and keep that entry
+in place.  When Renovate rewrites the branch (new version, conflict), the
+commit is dropped and the next workflow run adds it again.
 
 Releases created with `GITHUB_TOKEN` do not trigger other workflows, which is
 why the build is dispatched explicitly rather than relying on the release
@@ -189,7 +194,8 @@ is also used as the release notes for its GitHub release.  It has one
 
 6. **Renovate manages `VSCODE_VERSION` only** (in the Dockerfile and the
    matching `config.yaml` version). Do not add other version tracking to
-   `renovate.json` unless explicitly asked. The CI build uses the Dockerfile's
+   `renovate.json` unless explicitly asked (`gitIgnoredAuthors` is required by
+   the changelog step, see Version synchronisation). The CI build uses the Dockerfile's
    `BUILD_FROM` default; do not pass `BUILD_FROM` from the workflow.
 
 7. **s6 service scripts must be executable (`chmod +x`).** Files under

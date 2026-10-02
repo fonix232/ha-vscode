@@ -2,11 +2,14 @@
 name: Auto-update VS Code version
 
 # Renovate bumps both vscode/Dockerfile and vscode/config.yaml in one PR (see
-# .github/renovate.json). This workflow verifies, merges, releases and builds
-# it. It must never push to the Renovate branch: doing so marks the PR as
-# edited and Renovate stops updating it, so the changelog entry (VS Code's
-# release highlights plus any unreleased add-on entries, see
-# .github/scripts/changelog.js) is committed to main after the merge.
+# .github/renovate.json). This workflow verifies it, adds the changelog entry
+# to the PR (VS Code's release highlights plus any unreleased add-on entries,
+# see .github/scripts/changelog.js), then merges, releases and builds it.
+#
+# The changelog commit is authored by github-actions[bot], which is listed in
+# renovate.json's gitIgnoredAuthors. Any other author on the Renovate branch
+# marks the PR as edited and Renovate stops updating it. When Renovate
+# rewrites the branch it drops the commit, and the next run adds it again.
 
 on:
   pull_request:
@@ -29,39 +32,35 @@ jobs:
       startsWith(github.head_ref, 'renovate/microsoft-vscode-') &&
       (github.actor == 'renovate[bot]' || github.actor == 'renovate')
     steps:
-      - name: Checkout changelog script
+      # The branch tip rather than the event commit, so a re-run after the
+      # changelog commit was pushed picks it up instead of conflicting.
+      # Full history for the release tags changelog.js folds entries by.
+      - name: Checkout PR branch
         uses: actions/checkout@v6
         with:
-          sparse-checkout: .github/scripts
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
 
-      - name: Verify, merge, release and build
+      - name: Verify versions
+        id: version
+        run: |
+          vscode=$(sed -n 's/^ARG VSCODE_VERSION="\([^"]*\)"/\1/p' vscode/Dockerfile)
+          version=$(sed -n 's/^version: //p' vscode/config.yaml)
+          echo "VS Code ${vscode}, add-on ${version}"
+          if [[ -z "${vscode}" || "${version}" != "${vscode}.0" ]]; then
+            echo "::error::config.yaml version ${version} does not match expected ${vscode}.0"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for checks
         uses: actions/github-script@v9
         with:
           script: |
+            // Up to 10 minutes, on Renovate's commit: the changelog commit
+            // is pushed with GITHUB_TOKEN, which triggers no workflows.
             const { owner, repo } = context.repo;
-            const pull_number = context.payload.pull_request.number;
             const sha = context.payload.pull_request.head.sha;
-            const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-            // 1. Verify config.yaml version == Dockerfile VSCODE_VERSION + ".0"
-            const read = async path => {
-              const { data } = await github.rest.repos.getContent({ owner, repo, path, ref: sha });
-              return Buffer.from(data.content, 'base64').toString();
-            };
-            const [dockerfile, config] = await Promise.all([
-              read('vscode/Dockerfile'),
-              read('vscode/config.yaml'),
-            ]);
-            const vscodeVersion = dockerfile.match(/^ARG VSCODE_VERSION="([^"]+)"/m)?.[1];
-            const version = config.match(/^version: (\S+)/m)?.[1];
-            core.info(`VS Code ${vscodeVersion}, add-on ${version}`);
-            if (!vscodeVersion || version !== `${vscodeVersion}.0`) {
-              core.setFailed(`config.yaml version ${version} does not match expected ${vscodeVersion}.0`);
-              return;
-            }
-            const tag = `v${version}`;
-
-            // 2. Wait up to 10 minutes for other checks on the head commit
             for (let i = 0; ; i++) {
               const runs = await github.paginate(github.rest.checks.listForRef, {
                 owner, repo, ref: sha, filter: 'latest', per_page: 100,
@@ -73,19 +72,48 @@ jobs:
                   !['success', 'skipped', 'neutral'].includes(cr.conclusion));
                 if (failed.length > 0) {
                   core.setFailed(`Checks failed: ${failed.map(cr => cr.name).join(', ')}`);
-                  return;
                 }
-                break;
+                return;
               }
               if (i >= 30) {
                 core.setFailed('Timed out waiting for checks');
                 return;
               }
               core.info(`Waiting for ${pending.length} check(s)...`);
-              await sleep(20000);
+              await new Promise(r => setTimeout(r, 20000));
             }
 
-            // 3. Merge. pr.mergeable is computed asynchronously and can be
+      - name: Add changelog entry
+        id: changelog
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          if node .github/scripts/changelog.js notes "${VERSION}" > /dev/null 2>&1; then
+            echo "Changelog already has ${VERSION}"
+          else
+            node .github/scripts/changelog.js add "${VERSION}"
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m "docs: changelog for ${VERSION}" -- vscode/CHANGELOG.md
+            git push origin "HEAD:refs/heads/${BRANCH}"
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Merge, release and build
+        uses: actions/github-script@v9
+        env:
+          SHA: ${{ steps.changelog.outputs.sha }}
+          VERSION: ${{ steps.version.outputs.version }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pull_number = context.payload.pull_request.number;
+            const { SHA: sha, VERSION: version } = process.env;
+            const tag = `v${version}`;
+            const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+            // 1. Merge. pr.mergeable is computed asynchronously and can be
             // stale, so retry the merge itself on 405. Passing sha guarantees
             // only the verified commit is merged.
             let mergeSha;
@@ -118,46 +146,15 @@ jobs:
             }
             core.info(`Merged as ${mergeSha}`);
 
-            // 4. Changelog entry, committed to main on top of the merge. On a
-            // re-run the entry already exists and main is released as is.
+            // 2. Release (idempotent, so re-runs are safe), with the
+            // changelog entry as its notes.
             const changelog = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/changelog.js`);
-            const path = 'vscode/CHANGELOG.md';
-            const vscodeNotes = await changelog.vscodeNotes(vscodeVersion);
-            const released = new Set(
-              (await github.paginate(github.rest.repos.listTags, { owner, repo, per_page: 100 }))
-                .map(t => t.name.replace(/^v/, '')));
-            let target, text;
-            for (let i = 0; !target; i++) {
-              const { data: file } = await github.rest.repos.getContent({ owner, repo, path, ref: 'main' });
-              const current = Buffer.from(file.content, 'base64').toString();
-              const updated = changelog.addRelease(current, version, { vscode: vscodeNotes, released });
-              if (updated === null) {
-                text = current;
-                ({ data: { commit: { sha: target } } } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' }));
-                core.info(`Changelog already has ${version}`);
-                break;
-              }
-              try {
-                ({ data: { commit: { sha: target } } } = await github.rest.repos.createOrUpdateFileContents({
-                  owner, repo, path, branch: 'main', sha: file.sha,
-                  message: `docs: changelog for ${version}`,
-                  content: Buffer.from(updated).toString('base64'),
-                }));
-                text = updated;
-                core.info(`Committed changelog for ${version} as ${target}`);
-              } catch (err) {
-                // 409: main moved under us; re-read and retry.
-                if (err.status !== 409 || i >= 3) throw err;
-                await sleep(2000);
-              }
-            }
-
-            // 5. Release (idempotent, so re-runs are safe)
+            const text = require('fs').readFileSync('vscode/CHANGELOG.md', 'utf8');
             try {
               await github.rest.repos.createRelease({
                 owner, repo,
                 tag_name: tag,
-                target_commitish: target,
+                target_commitish: mergeSha,
                 name: `VS Code ${version}`,
                 body: changelog.section(text, version),
               });
@@ -167,7 +164,7 @@ jobs:
               core.info(`Release ${tag} already exists`);
             }
 
-            // 6. Build. Releases created with GITHUB_TOKEN do not trigger
+            // 3. Build. Releases created with GITHUB_TOKEN do not trigger
             // other workflows; workflow_dispatch is exempt from that rule.
             await github.rest.actions.createWorkflowDispatch({
               owner, repo, workflow_id: 'build.yaml', ref: tag,

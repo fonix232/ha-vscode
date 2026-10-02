@@ -92,7 +92,10 @@ async function vscodeNotes(vscodeVersion, fetchImpl = fetch) {
   }
 
   paragraphs.push(`[Full release notes](${page})`);
-  return absolutize(paragraphs.join('\n\n'), page);
+  // Drop the docs' conditional-content comments, e.g. the
+  // `<!-- %IF INSIDERS % ... -->` markers in notes drafted during Insiders.
+  const text = paragraphs.join('\n\n').replace(/[ \t]*<!--[\s\S]*?-->/g, '');
+  return absolutize(text, page);
 }
 
 /**
