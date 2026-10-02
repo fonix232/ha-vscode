@@ -22,7 +22,17 @@ if bashio::config.has_value 'config_path'; then
 fi
 
 # Ensure persistent data folders exist.
-mkdir -p /data/vscode/{server-data,user-data,extensions,tunnel-data}
+mkdir -p /data/vscode/{server-data,user-data,extensions,tunnel-data,sync}
+
+# Per-user secret storage sync (see /etc/nginx/vscode-sync.js): nginx workers
+# write the encrypted blobs, and the HMAC key is generated once per install.
+chown www-data:www-data /data/vscode/sync
+chmod 700 /data/vscode/sync
+if ! bashio::fs.file_exists '/data/vscode/sync-key'; then
+    (umask 077 && head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' \
+        > /data/vscode/sync-key) \
+        || bashio::exit.nok "Could not create the secret sync key."
+fi
 
 # Sets up default user settings on first start.
 if ! bashio::fs.file_exists '/data/vscode/user-data/User/settings.json'; then

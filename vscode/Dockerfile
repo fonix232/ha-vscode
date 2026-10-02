@@ -25,6 +25,7 @@ RUN \
         curl \
         wget \
         nginx \
+        libnginx-mod-http-js \
         openssh-client \
         locales \
     \

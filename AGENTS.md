@@ -17,7 +17,8 @@ vscode/
   rootfs/
     etc/
       nginx/
-        nginx-vscode.conf      # nginx reverse proxy: port 1337 → 127.0.0.1:1338
+        nginx-vscode.conf.tmpl # nginx reverse proxy: port 1337 → 127.0.0.1:1338
+        vscode-sync.js         # njs: per-HA-user secret storage sync
       s6-overlay/s6-rc.d/
         init-user/             # Installs packages, sets up SSH/git, runs init_commands
         init-vscode/           # Creates /data/vscode/* directories, seeds settings
@@ -62,6 +63,36 @@ The HA ingress token rotates on every add-on restart. VS Code sets a fresh
 load), so the browser self-heals automatically on first access after a
 restart.
 
+### Per-user secret storage sync
+
+VS Code web keeps extension secrets encrypted in browser `localStorage`
+(`secrets.provider`). The AES key comes from `mint-key`:
+`SHA256(server half + client half)`. The client half is the HttpOnly
+`vscode-cli-secret-half` cookie, and VS Code **deletes** the blob when it
+cannot decrypt it. Left as is, every browser, device and HA URL starts
+signed out.
+
+`rootfs/etc/nginx/vscode-sync.js` (njs, `libnginx-mod-http-js`) ties secrets
+to the HA user instead, keyed by the `X-Remote-User-Id` header that Supervisor
+ingress sets and strips from client requests:
+
+- **Pinned key half.** `js_set $vscode_cookie` replaces the cookie's client
+  half with `HMAC(/data/vscode/sync-key, user id)` on every upstream request.
+  Each user then derives the same AES key everywhere.
+- **Injected script.** `sub_filter` on `location = /` (the workbench page)
+  injects `<script src="…/_ha-vscode/sync.js">`. The script is same-origin,
+  so the workbench CSP allows it.
+- **Restore.** `sync.js` seeds `localStorage` with the user's stored blob
+  before the workbench loads.
+- **Save.** `sync.js` wraps `Storage.prototype.setItem` and PUTs changes to
+  `/_ha-vscode/secrets`, which writes `/data/vscode/sync/<user id>.secrets`.
+  Removals are not synced, so a failed decrypt never wipes the server copy.
+- **Workers.** nginx workers run as `www-data`; `init-vscode` chowns
+  `/data/vscode/sync`.
+
+Without the header (no Supervisor), all of this falls back to stock VS Code
+behaviour.
+
 Do not remove or bypass nginx. Do not add `--user-data-dir` to `code
 serve-web` — that flag is not accepted in web mode.
 
@@ -74,6 +105,8 @@ serve-web` — that flag is not accepted in web mode.
 | `user-data/` | User settings (settings.json, keybindings, snippets) |
 | `extensions/` | Reserved for future extension pre-installation |
 | `tunnel-data/` | Reserved for tunnel mode |
+| `sync/` | Per-HA-user encrypted secret storage blobs (owned by `www-data`) |
+| `sync-key` | HMAC key for per-user secret key halves (generated once) |
 
 ### S6 service startup order
 
@@ -178,7 +211,9 @@ When bumping the Dockerfile manually, update `config.yaml` to
    in the bundle.
 
 ### Test the nginx config syntax locally
+The config needs the njs module, so test it in the add-on image:
 ```bash
-docker run --rm -v "$PWD/vscode/rootfs/etc/nginx/nginx-vscode.conf:/etc/nginx/nginx-vscode.conf" \
-  nginx:alpine nginx -t -c /etc/nginx/nginx-vscode.conf
+docker build --build-arg BUILD_ARCH=aarch64 -t ha-vscode-test vscode
+docker run --rm --entrypoint bash ha-vscode-test -c \
+  'sed "s|@@INGRESS@@|/test|g" /etc/nginx/nginx-vscode.conf.tmpl > /tmp/n.conf && nginx -t -c /tmp/n.conf'
 ```
