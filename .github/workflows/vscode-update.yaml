@@ -4,7 +4,9 @@ name: Auto-update VS Code version
 # Renovate bumps both vscode/Dockerfile and vscode/config.yaml in one PR (see
 # .github/renovate.json). This workflow verifies, merges, releases and builds
 # it. It must never push to the Renovate branch: doing so marks the PR as
-# edited and Renovate stops updating it.
+# edited and Renovate stops updating it, so the changelog entry (VS Code's
+# release highlights plus any unreleased add-on entries, see
+# .github/scripts/changelog.js) is committed to main after the merge.
 
 on:
   pull_request:
@@ -27,6 +29,11 @@ jobs:
       startsWith(github.head_ref, 'renovate/microsoft-vscode-') &&
       (github.actor == 'renovate[bot]' || github.actor == 'renovate')
     steps:
+      - name: Checkout changelog script
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: .github/scripts
+
       - name: Verify, merge, release and build
         uses: actions/github-script@v9
         with:
@@ -111,15 +118,48 @@ jobs:
             }
             core.info(`Merged as ${mergeSha}`);
 
-            // 4. Release (idempotent, so re-runs are safe)
+            // 4. Changelog entry, committed to main on top of the merge. On a
+            // re-run the entry already exists and main is released as is.
+            const changelog = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/changelog.js`);
+            const path = 'vscode/CHANGELOG.md';
+            const vscodeNotes = await changelog.vscodeNotes(vscodeVersion);
+            const released = new Set(
+              (await github.paginate(github.rest.repos.listTags, { owner, repo, per_page: 100 }))
+                .map(t => t.name.replace(/^v/, '')));
+            let target, text;
+            for (let i = 0; !target; i++) {
+              const { data: file } = await github.rest.repos.getContent({ owner, repo, path, ref: 'main' });
+              const current = Buffer.from(file.content, 'base64').toString();
+              const updated = changelog.addRelease(current, version, { vscode: vscodeNotes, released });
+              if (updated === null) {
+                text = current;
+                ({ data: { commit: { sha: target } } } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' }));
+                core.info(`Changelog already has ${version}`);
+                break;
+              }
+              try {
+                ({ data: { commit: { sha: target } } } = await github.rest.repos.createOrUpdateFileContents({
+                  owner, repo, path, branch: 'main', sha: file.sha,
+                  message: `docs: changelog for ${version}`,
+                  content: Buffer.from(updated).toString('base64'),
+                }));
+                text = updated;
+                core.info(`Committed changelog for ${version} as ${target}`);
+              } catch (err) {
+                // 409: main moved under us; re-read and retry.
+                if (err.status !== 409 || i >= 3) throw err;
+                await sleep(2000);
+              }
+            }
+
+            // 5. Release (idempotent, so re-runs are safe)
             try {
               await github.rest.repos.createRelease({
                 owner, repo,
                 tag_name: tag,
-                target_commitish: mergeSha,
+                target_commitish: target,
                 name: `VS Code ${version}`,
-                body: `Automated release: updates VS Code to ${version}`,
-                generate_release_notes: true,
+                body: changelog.section(text, version),
               });
               core.info(`Created release ${tag}`);
             } catch (err) {
@@ -127,7 +167,7 @@ jobs:
               core.info(`Release ${tag} already exists`);
             }
 
-            // 5. Build. Releases created with GITHUB_TOKEN do not trigger
+            // 6. Build. Releases created with GITHUB_TOKEN do not trigger
             // other workflows; workflow_dispatch is exempt from that rule.
             await github.rest.actions.createWorkflowDispatch({
               owner, repo, workflow_id: 'build.yaml', ref: tag,
