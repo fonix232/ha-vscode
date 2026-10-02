@@ -1,7 +1,14 @@
+load_module /usr/lib/nginx/modules/ngx_http_js_module.so;
+
+# Workers must be able to write /data/vscode/sync (chowned by init-vscode).
+user www-data;
 worker_processes 1;
 daemon off;
 error_log stderr warn;
 pid /run/nginx-vscode.pid;
+
+# HMAC key for the per-user secret key halves (see vscode-sync.js).
+env VSCODE_SYNC_SECRET;
 
 events {
     worker_connections 1024;
@@ -10,14 +17,48 @@ events {
 http {
     access_log off;
 
+    js_path /etc/nginx;
+    js_import vscode_sync from vscode-sync.js;
+    js_set $vscode_cookie vscode_sync.cookie;
+
     # WebSocket upgrade mapping
     map $http_upgrade $connection_upgrade {
         default upgrade;
         ''      close;
     }
 
+    # The workbench page is rewritten by sub_filter, which cannot handle
+    # compressed responses.  Everything else keeps the client's encodings.
+    map $uri $upstream_accept_encoding {
+        default $http_accept_encoding;
+        /       "";
+    }
+
     server {
         listen 1337;
+
+        # @@INGRESS@@ is substituted at container start-up by the
+        # nginx-vscode/run script with $(bashio::addon.ingress_entry).
+        set $ingress_entry "@@INGRESS@@";
+
+        proxy_http_version 1.1;
+
+        # WebSocket support
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+
+        # Pin the vscode-cli-secret-half cookie to the HA user, so the
+        # secret storage key is the same in every browser.
+        proxy_set_header Cookie $vscode_cookie;
+        proxy_set_header Accept-Encoding $upstream_accept_encoding;
+
+        # Long-lived connections (terminal, extension host)
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+
+        # Stream responses (terminal output, large file transfers)
+        proxy_buffering off;
 
         # -------------------------------------------------------
         # Route /_vscode-cli/* requests back to VS Code with the
@@ -36,34 +77,36 @@ http {
         # HA ingress token rotates; VS Code sets a fresh cookie on
         # the very next response, so the browser self-heals on the
         # first page load after a restart.
-        #
-        # @@INGRESS@@ is substituted at container start-up by the
-        # nginx-vscode/run script with $(bashio::addon.ingress_entry).
         # -------------------------------------------------------
         location /_vscode-cli/ {
             proxy_pass http://127.0.0.1:1338@@INGRESS@@/_vscode-cli/;
-            proxy_http_version 1.1;
-            proxy_set_header Host $host;
-            proxy_buffering off;
-            proxy_read_timeout 86400s;
-            proxy_send_timeout 86400s;
+        }
+
+        # -------------------------------------------------------
+        # Per-user secret storage sync (see vscode-sync.js).
+        # sync.js is loaded by the workbench page; it is same-origin,
+        # so the workbench CSP (script-src 'self') allows it.
+        # -------------------------------------------------------
+        location = /_ha-vscode/sync.js {
+            js_content vscode_sync.script;
+        }
+
+        location = /_ha-vscode/secrets {
+            # Keep the body in memory so njs can read it.
+            client_max_body_size 1m;
+            client_body_buffer_size 1m;
+            js_content vscode_sync.save;
+        }
+
+        # Workbench page (and the remote WebSocket, which shares the path).
+        location = / {
+            proxy_pass http://127.0.0.1:1338;
+            sub_filter '<head>' '<head><script src="@@INGRESS@@/_ha-vscode/sync.js"></script>';
+            sub_filter_once on;
         }
 
         location / {
             proxy_pass http://127.0.0.1:1338;
-            proxy_http_version 1.1;
-
-            # WebSocket support
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection $connection_upgrade;
-            proxy_set_header Host $host;
-
-            # Long-lived connections (terminal, extension host)
-            proxy_read_timeout 86400s;
-            proxy_send_timeout 86400s;
-
-            # Stream responses (terminal output, large file transfers)
-            proxy_buffering off;
         }
     }
 }

@@ -23,4 +23,8 @@ sed "s|@@INGRESS@@|${ingress_entry}|g" \
     /etc/nginx/nginx-vscode.conf.tmpl \
     > /tmp/nginx-vscode.conf
 
+# HMAC key for per-user secret storage sync (see /etc/nginx/vscode-sync.js).
+VSCODE_SYNC_SECRET=$(</data/vscode/sync-key)
+export VSCODE_SYNC_SECRET
+
 exec nginx -c /tmp/nginx-vscode.conf 2>&1

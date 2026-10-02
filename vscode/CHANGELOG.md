@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.140.0.1
+
+- Signed-in accounts (GitHub, Copilot and other extension credentials) now
+  follow your Home Assistant user to every browser, device and HA URL. nginx
+  pins VS Code's secret key half to the HA user and stores the encrypted
+  secrets on the add-on (`/data/vscode/sync/`).
+- You need to sign in to your accounts once more after this update.
+
 ## 1.118.1.1
 
 - Fix: auth (GitHub Copilot, Settings Sync) now survives addon restarts. nginx uses the `headers-more` module to rewrite the `vscode-secret-key-path` cookie to always reflect the current HA ingress token, so the mint-key endpoint is never stale.
