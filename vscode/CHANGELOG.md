@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.141.0.0
+
+### VS Code 1.141.0
+
+This release makes it easier to manage agent sessions, protect agent workflows, edit columnar text, and work across GitHub Enterprise instances.
+
+- [Clean up worktree storage](https://code.visualstudio.com/updates/v1_141#reclaim-storage-from-inactive-worktrees): Reclaim disk space from inactive agent session worktrees, on demand or automatically.
+- [Cross-platform sandboxing](https://code.visualstudio.com/updates/v1_141#sandboxing-in-the-copilot-agent-host): Limit agent access to files and network resources on Windows, macOS, and Linux with terminal sandboxing.
+- [Arrange sessions](https://code.visualstudio.com/updates/v1_141#arrange-sessions-in-a-grid): Compare and monitor multiple agent sessions side by side in a grid layout.
+- [Continue external sessions](https://code.visualstudio.com/updates/v1_141#continue-local-external-copilot-sessions-without-reloading): Pick up local external Copilot and Codex conversations in VS Code without losing context.
+- [Block pasting](https://code.visualstudio.com/updates/v1_141#spreading-block-pasting): Paste block rows across successive lines from a single cursor.
+- [Multiple GitHub Enterprise instances](https://code.visualstudio.com/updates/v1_141#sign-in-to-multiple-github-enterprise-instances): Sign in to GHE.com and GitHub Enterprise Server accounts from the same VS Code window.
+
+[Full release notes](https://code.visualstudio.com/updates/v1_141)
+
 ## 1.140.0.1
 
 - Signed-in accounts (GitHub, Copilot and other extension credentials) now
