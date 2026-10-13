@@ -36,7 +36,7 @@ jobs:
       # changelog commit was pushed picks it up instead of conflicting.
       # Full history for the release tags changelog.js folds entries by.
       - name: Checkout PR branch
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
