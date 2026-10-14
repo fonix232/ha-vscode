@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.142.0.0
+
+### VS Code 1.142.0
+
+This release adds shared canvases for agent workflows, lets you move chats without losing context, expands the Markdown editor, and gives administrators more control over agent permissions.
+
+- [Canvases (Preview)](https://code.visualstudio.com/updates/v1_142#canvases-preview): Collaborate with agents beyond chat using visual and interactive canvases.
+- [Move chats](https://code.visualstudio.com/updates/v1_142#move-chats-between-folders-and-worktrees): Continue a chat in another folder or a new Git worktree without losing conversation history.
+- [Markdown editor](https://code.visualstudio.com/updates/v1_142#markdown-editor): Work on Markdown files more efficiently with features like pasting images, renaming file links, or breadcrumb navigation.
+- [Enterprise management](https://code.visualstudio.com/updates/v1_142#enterprise): Enforce agent sandboxing and permission policies while controlling which permission modes developers can use.
+- [Redesigned model picker](https://code.visualstudio.com/updates/v1_142#redesigned-model-picker): Quickly switch between Copilot and BYOK contributed models, and manage effort levels and context windows more intuitively.
+
+[Full release notes](https://code.visualstudio.com/updates/v1_142)
+
 ## 1.141.2.0
 
 ### VS Code 1.141.2
