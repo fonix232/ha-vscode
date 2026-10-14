@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.141.2.0
+
+### VS Code 1.141.2
+
+The update addresses these [issues](https://github.com/microsoft/vscode/pulls?q=is%3Apr+milestone%3A1.141.2+is%3Aclosed+label%3Acandidate).
+
+[Full release notes](https://code.visualstudio.com/updates/v1_141)
+
 ## 1.141.1.0
 
 ### VS Code 1.141.1
