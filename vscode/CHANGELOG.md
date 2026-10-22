@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.143.0.0
+
+### VS Code 1.143.0
+
+This release makes the Copilot harness the default for new sessions and adds tools to compare models, reclaim storage, run models locally, and navigate file changes.
+
+- [Copilot harness by default](https://code.visualstudio.com/updates/v1_143#copilot-harness-as-the-default): The default for new sessions, built on the Copilot SDK, lets you switch between editor and Agents window.
+- [Compare models (Preview)](https://code.visualstudio.com/updates/v1_143#compare-model-results-preview): Run the same task with multiple models in the Agents window, then compare and combine their solutions.
+- [Reclaim worktree storage (Experimental)](https://code.visualstudio.com/updates/v1_143#reclaim-storage-from-inactive-worktrees-experimental): Free disk space by reviewing and removing inactive agent session worktrees.
+- [On-device models (Experimental)](https://code.visualstudio.com/updates/v1_143#run-copilot-models-on-your-device-experimental): Run MAI Code 1.1 Flash locally on your device for your agent tasks.
+- [Multi-diff file list (Experimental)](https://code.visualstudio.com/updates/v1_143#multi-file-diff-editor-file-list-experimental): Keep an overview of and jump between changed files in the multi-file diff editor.
+
+[Full release notes](https://code.visualstudio.com/updates/v1_143)
+
 ## 1.142.0.0
 
 ### VS Code 1.142.0
