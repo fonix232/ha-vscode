@@ -14,7 +14,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # Setup base system and install Microsoft VS Code
 ARG BUILD_ARCH=amd64
 # renovate: datasource=github-releases depName=microsoft/vscode
-ARG VSCODE_VERSION="1.142.0"
+ARG VSCODE_VERSION="1.143.0"
 
 # hadolint ignore=DL3008
 RUN \
