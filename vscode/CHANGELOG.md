@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.144.0.0
+
+### VS Code 1.144.0
+
+This release helps you keep agent work moving across environments, find the right models for each task, and stay in control of changes and tool calls.
+
+- [Session continuity](https://code.visualstudio.com/updates/v1_144#session-continuity): Manage remotes in one place and keep sessions and automations running even when your computer is off.
+- [Copilot Fusion and model comparisons](https://code.visualstudio.com/updates/v1_144#models): Let Copilot choose and orchestrate models, or compare models side by side.
+- [Image generation (Preview)](https://code.visualstudio.com/updates/v1_144#image-generation-in-copilot-preview): Create and edit images directly in chat.
+- [Computer use (Experimental)](https://code.visualstudio.com/updates/v1_144#let-agents-use-desktop-apps-with-computer-use): Let agents use desktop apps on your computer.
+- [Working set (Experimental)](https://code.visualstudio.com/updates/v1_144#review-copilot-file-edits-with-the-working-set-experimental): Keep or undo agent file edits in the editor.
+- [Assisted permissions](https://code.visualstudio.com/updates/v1_144#assisted-permissions-are-generally-available): Reduce interruptions with automatic approval for tool calls that pass a risk check.
+- [Customization marketplace](https://code.visualstudio.com/updates/v1_144#discover-marketplace-customizations-preview) and [Copilot connectors](https://code.visualstudio.com/updates/v1_144#connect-services-with-copilot-connectors-preview) (Preview): Discover skills and plugins for your workflow, and bring context from Slack, Notion, and other services into your agent sessions.
+
+[Full release notes](https://code.visualstudio.com/updates/v1_144)
+
 ## 1.143.1.0
 
 ### VS Code 1.143.1
