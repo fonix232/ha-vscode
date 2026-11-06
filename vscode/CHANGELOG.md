@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.145.1.0
+
+### VS Code 1.145.1
+
+The update addresses these [issues](https://github.com/microsoft/vscode/issues?q=is%3Aissue+is%3Aclosed+milestone%3A1.145.1).
+
+[Full release notes](https://code.visualstudio.com/updates/v1_145)
+
 ## 1.144.0.0
 
 ### VS Code 1.144.0
