@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.145.3.0
+
+### VS Code 1.145.3
+
+The update addresses these [security issues](https://github.com/microsoft/vscode/issues?q=milestone%3A1.145.3+state%3Aclosed+label%3Acandidate).
+
+[Full release notes](https://code.visualstudio.com/updates/v1_145)
+
 ## 1.145.2.0
 
 ### VS Code 1.145.2
