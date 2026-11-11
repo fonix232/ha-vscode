@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.146.0.0
+
+### VS Code 1.146.0
+
+Save your brainpower for the work that needs it. Inbox mode keeps the right sessions on your radar while agents take on model comparisons. Shape your agent workspace around the task with chat windows and extensions.
+
+Happy coding!
+
+- [Inbox mode (Experimental)](https://code.visualstudio.com/updates/v1_146#inbox-mode-for-sessions-experimental): Focus on sessions that need your attention across all your projects, and snooze others for later.
+- [Model comparison (Preview)](https://code.visualstudio.com/updates/v1_146#model-comparison-improvements-preview): Compare results with Copilot Fusion in the mix, or let an agent run comparisons for you.
+- [Chat windows (Preview)](https://code.visualstudio.com/updates/v1_146#chat-windows-preview): Give chats their own windows and rearrange chats, editors, and terminals to fit the task.
+- [Extensions in the Agents window (Experimental)](https://code.visualstudio.com/updates/v1_146#install-and-manage-extensions-in-the-agents-window-experimental): Find and install extensions for a richer agent experience.
+- [Local harness deprecation](https://code.visualstudio.com/updates/v1_146#copilot-harness-and-deprecation-of-the-local-harness): Move to the Copilot harness before the Local harness is removed in February 2027.
+
+[Full release notes](https://code.visualstudio.com/updates/v1_146)
+
 ## 1.145.3.0
 
 ### VS Code 1.145.3
