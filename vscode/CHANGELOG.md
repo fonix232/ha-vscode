@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.147.0.0
+
+### VS Code 1.147.0
+
+Have a task in mind but not ready to send it? This week, save requests as drafts or schedule them for later. When you're ready, let a model router match the task to your preferred model. And when a result is easier to show than explain, ask for a chart or mockup.
+
+- [Send later (Experimental)](https://code.visualstudio.com/updates/v1_147#send-later-for-chat-requests-experimental): Schedule local agent requests and follow-ups for later in the Agents window.
+- [Browser integration (Preview)](https://code.visualstudio.com/updates/v1_147#browser-integration): Let agents control your default browser, and preview remote HTML files without copying them to your machine.
+- [Draft requests (Experimental)](https://code.visualstudio.com/updates/v1_147#save-and-resume-drafts-experimental): Keep multiple unsent requests with their context and configuration in the Agents window, ready to send when you are.
+- [Customize assisted permissions](https://code.visualstudio.com/updates/v1_147#more-context-for-assisted-permissions): Tell the permission reviewer which actions you consider safe and which should need your approval.
+- [Visual chat responses](https://code.visualstudio.com/updates/v1_147#html-previews-and-native-visuals-in-agent-responses): Review reports, mockups, and charts inline in the Agents window with HTML previews and experimental native visuals.
+- [Model routers (Experimental)](https://code.visualstudio.com/updates/v1_147#decision-model-based-model-routers-experimental): Let a model router choose from your preferred models for different tasks.
+
+[Full release notes](https://code.visualstudio.com/updates/v1_147)
+
 ## 1.146.0.0
 
 ### VS Code 1.146.0
