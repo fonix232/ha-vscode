@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.148.0.0
+
+### VS Code 1.148.0
+
+Keep agent work moving, even when you step away. This week, chat responses start faster and active agents can keep their hosts awake. Give a task its own Dev Container, and reclaim disk space from old worktrees without switching windows.
+
+- [Keep agents going (Preview)](https://code.visualstudio.com/updates/v1_148#prevent-idle-sleep-while-an-agent-works-preview): Prevent idle sleep of the systemon supported hosts while agents work.
+- [Worktree cleanup](https://code.visualstudio.com/updates/v1_148#worktree-cleanup-on-remote-hosts): Reclaim disk space from inactive agent worktrees on remote hosts.
+- [Sandbox profiles (Experimental)](https://code.visualstudio.com/updates/v1_148#sandbox-profiles-for-remote-environments-experimental): Tailor sandbox rules to each remote agent host with reusable profiles.
+- [Create Dev Containers (Experimental)](https://code.visualstudio.com/updates/v1_148#create-dev-containers-for-agent-sessions-experimental): Give an agent an isolated Linux workspace without writing a container configuration.
+- [Agent chat performance](https://code.visualstudio.com/updates/v1_148#improved-chat-performance): Spend less time waiting for Agent Host chat responses to begin.
+
+[Full release notes](https://code.visualstudio.com/updates/v1_148)
+
 ## 1.147.0.0
 
 ### VS Code 1.147.0
